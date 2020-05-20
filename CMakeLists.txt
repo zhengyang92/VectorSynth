@@ -49,14 +49,13 @@ include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 set(SYNTHESIZER_SRC
-  "lib/known_fns.cpp"
-  "lib/llvm2alive.cpp"
-  "lib/utils.cpp"
-  "lib/llvm2alive.cpp"
-  "lib/synthesizer.cpp"
+  "lib/constantsynth.cpp"
   "lib/ir.cpp"
   "lib/simd.cpp"
-  "lib/constantsynth.cpp"
+  "lib/synthesizer.cpp"
+  "alive_util/known_fns.cpp"
+  "alive_util/llvm2alive.cpp"
+  "alive_util/utils.cpp"
 )
 
 add_llvm_executable(alive-cs

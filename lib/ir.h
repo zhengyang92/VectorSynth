@@ -1,8 +1,7 @@
 #pragma once
 
-
+#include "lib/simd.h"
 #include "llvm/IR/IRBuilder.h"
-#include "simd.h"
 #include <vector>
 
 namespace vectorsynth {

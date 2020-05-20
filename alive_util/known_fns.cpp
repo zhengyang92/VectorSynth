@@ -1,8 +1,8 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "lib/known_fns.h"
-#include "lib/utils.h"
+#include "alive_util/known_fns.h"
+#include "alive_util/utils.h"
 #include "ir/function.h"
 #include "ir/instr.h"
 #include "llvm/IR/Constants.h"

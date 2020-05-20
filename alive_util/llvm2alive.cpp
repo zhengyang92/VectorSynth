@@ -1,10 +1,10 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "lib/llvm2alive.h"
-#include "lib/known_fns.h"
+#include "alive_util/llvm2alive.h"
+#include "alive_util/known_fns.h"
+#include "alive_util/utils.h"
 #include "lib/simd.h"
-#include "lib/utils.h"
 #include "util/sort.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/CFG.h"
