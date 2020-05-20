@@ -282,16 +282,35 @@ Errors ConstantSynth::synthesize(unordered_map<const Input*, expr> &result) cons
   auto uvars = sv.second;
   set<expr> qvars;
 
-  /*  for (auto &[var, val, used] : src_state.getValues()) {
+  Errors errs;
+
+  for (auto &[var, val, used] : src_state.getValues()) {
     (void)used;
     if (!dynamic_cast<const Input*>(var))
       continue;
-    cout<<val.first.value;
-    qvars.insert(val.first.value);
-    }*/
+
+    auto &ty = var->getType();
+
+    if (ty.isIntType()) {
+      qvars.insert(val.first.value);
+      continue;
+    }
+
+    if (ty.isVectorType() && ty.getAsAggregateType()->getChild(0).isIntType()) {
+      auto aty = ty.getAsAggregateType();
+      for (unsigned I = 0; I < aty->numElementsConst(); ++I) {
+        qvars.insert(aty->extract(val.first, I, false).value);
+      }
+      continue;
+    }
+
+    config::dbg()<<"constant synthesizer now only supports synthesizing integers and vector of integers"<<std::endl;
+    return errs;
+  }
+  /*
   for (auto e : src_state.getForAlls()) {
     qvars.insert(e);
-  }
+    }*/
 
   auto dom_a = src_state.returnDomain()();
   auto dom_b = tgt_state.returnDomain()();
@@ -325,7 +344,7 @@ Errors ConstantSynth::synthesize(unordered_map<const Input*, expr> &result) cons
     config::dbg()<<"Poison Constraints"<<std::endl;
     config::dbg()<<poison_cnstr<<std::endl;
   }
-  Errors errs;
+
   const Value *var = nullptr;
   bool check_each_var = false;
 
