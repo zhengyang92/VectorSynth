@@ -1,8 +1,8 @@
 // Copyright (c) 2020-present, author: Zhengyang Liu (liuz@cs.utah.edu).
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "llvm_util/llvm2alive.h"
-#include "synthesis/synthesizer.h"
+#include "lib/llvm2alive.h"
+#include "lib/synthesizer.h"
 #include "ir/instr.h"
 #include "smt/smt.h"
 #include "smt/solver.h"
@@ -25,7 +25,7 @@
 #include <utility>
 
 using namespace IR;
-using namespace llvm_util;
+using namespace vectorsynth;
 using namespace tools;
 using namespace util;
 using namespace std;
@@ -103,7 +103,7 @@ struct SuperoptimizerPass final : public llvm::FunctionPass {
     llvm::TargetLibraryInfo *TLI = &getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
     //   auto fn = llvm2alive(F, *TLI, vector<string_view>());
     //    cerr<<*fn<<endl;
-    return syn::synthesize(F, TLI);
+    return vectorsynth::synthesize(F, TLI);
   }
   bool doInitialization(llvm::Module &module) override {
     return false;

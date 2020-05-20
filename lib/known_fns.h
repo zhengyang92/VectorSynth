@@ -19,7 +19,7 @@ class Instr;
 class Value;
 }
 
-namespace llvm_util {
+namespace vectorsynth {
 
 // returned bool indicates whether it's a known function call
 std::pair<std::unique_ptr<IR::Instr>, bool>

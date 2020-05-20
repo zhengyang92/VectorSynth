@@ -1,8 +1,8 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "llvm_util/known_fns.h"
-#include "llvm_util/utils.h"
+#include "lib/known_fns.h"
+#include "lib/utils.h"
 #include "ir/function.h"
 #include "ir/instr.h"
 #include "llvm/IR/Constants.h"
@@ -16,7 +16,7 @@ using namespace std;
 #define RETURN_KNOWN(op)    return { op, true }
 #define RETURN_FAIL_KNOWN() return { nullptr, true }
 
-namespace llvm_util {
+namespace vectorsynth {
 
 pair<unique_ptr<Instr>, bool>
 known_call(llvm::CallInst &i, const llvm::TargetLibraryInfo &TLI,

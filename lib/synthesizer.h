@@ -12,6 +12,6 @@ class TargetLibraryInfo;
 class Triple;
 }
 
-namespace syn {
+namespace vectorsynth {
 bool synthesize (llvm::Function &F1, llvm::TargetLibraryInfo *TLI);
 };

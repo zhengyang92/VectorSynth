@@ -1,10 +1,11 @@
 // Copyright (c) 2020-present, author: Zhengyang Liu (liuz@cs.utah.edu).
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "llvm2alive.h"
+#include "lib/llvm2alive.h"
+#include "lib/ir.h"
+#include "lib/constantsynth.h"
 #include "smt/smt.h"
 #include "tools/transform.h"
-#include "synthesis/ir.h"
 #include "util/symexec.h"
 #include "util/config.h"
 #include "util/version.h"
@@ -311,18 +312,9 @@ static bool constantSynthesis(IR::Function &Func1, IR::Function &Func2,
   Transform t;
   t.src = move(Func1);
   t.tgt = move(Func2);
-  TransformVerify verifier(t, false);
+  vectorsynth::ConstantSynth verifier(t, false);
   t.print(cout, print_opts);
-  {
-    auto types = verifier.getTypings();
-    if (!types) {
-      cerr << "Transformation doesn't verify!\n"
-              "ERROR: program doesn't type check!\n\n";
-      ++errorCount;
-      return true;
-    }
-    assert(types.hasSingleTyping());
-  }
+  // assume type verifies
   std::unordered_map<const IR::Input *, smt::expr> result;
   Errors errs = verifier.synthesize(result);
 

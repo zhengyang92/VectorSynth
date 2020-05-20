@@ -1,7 +1,7 @@
 // Copyright (c) 2018-present The Alive2 Authors.
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "llvm_util/utils.h"
+#include "lib/utils.h"
 #include "ir/constant.h"
 #include "ir/function.h"
 #include "llvm/IR/Constants.h"
@@ -59,7 +59,7 @@ bool hasOpaqueType(llvm::Type *ty) {
 
 }
 
-namespace llvm_util {
+namespace vectorsynth {
 
 BasicBlock& getBB(const llvm::BasicBlock *bb) {
   return current_fn->getBB(value_name(*bb));

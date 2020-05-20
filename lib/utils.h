@@ -23,7 +23,7 @@ class Type;
 class Value;
 }
 
-namespace llvm_util {
+namespace vectorsynth {
 
 IR::BasicBlock& getBB(const llvm::BasicBlock *bb);
 
