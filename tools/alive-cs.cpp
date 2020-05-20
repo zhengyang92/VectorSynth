@@ -1,4 +1,5 @@
 #include "lib/llvm2alive.h"
+#include "lib/constantsynth.h"
 #include "ir/type.h"
 #include "ir/instr.h"
 #include "ir/function.h"
@@ -27,7 +28,6 @@
 using namespace tools;
 using namespace util;
 using namespace std;
-using namespace llvm_util;
 
 static llvm::cl::OptionCategory opt_alive("Alive options");
 
@@ -116,8 +116,8 @@ int main(int argc, char **argv) {
   llvm::Function &F2 = *(M2.get()->getFunction("foo"));
 
   unsigned /*goodCount = 0, badCount = 0,*/ errorCount = 0;
-  auto Func1 = llvm2alive(F1, llvm::TargetLibraryInfoWrapperPass(targetTriple)
-                          .getTLI(F1));
+  auto Func1 = vectorsynth::llvm2alive(F1, llvm::TargetLibraryInfoWrapperPass(targetTriple)
+                                       .getTLI(F1));
 
   if (!Func1) {
     cerr << "ERROR: Could not translate '" << F1.getName().str()
@@ -126,8 +126,8 @@ int main(int argc, char **argv) {
     return true;
   }
 
-  auto Func2 = llvm2alive(F2, llvm::TargetLibraryInfoWrapperPass(targetTriple)
-                          .getTLI(F2), Func1->getGlobalVarNames());
+  auto Func2 = vectorsynth::llvm2alive(F2, llvm::TargetLibraryInfoWrapperPass(targetTriple)
+                                       .getTLI(F2), Func1->getGlobalVarNames());
   if (!Func2) {
     cerr << "ERROR: Could not translate '" << F2.getName().str()
          << "' to Alive IR\n";
@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
   Transform t;
   t.src = move(*Func1);
   t.tgt = move(*Func2);
-  TransformVerify tv(t, false);
+  vectorsynth::ConstantSynth tv(t, false);
   TransformPrintOpts print_opts;
   t.print(cout, print_opts);
 

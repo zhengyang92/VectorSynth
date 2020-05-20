@@ -17,7 +17,7 @@ class TargetLibraryInfo;
 class Argument;
 }
 
-namespace llvm_util {
+namespace vectorsynth {
 
 // The maximum number of elements of an array initializer to explicitly store.
 // If longer, the initializer will simply be omitted.

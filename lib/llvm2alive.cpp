@@ -1115,7 +1115,7 @@ public:
 
       auto *init_ty = gv->getInitializer()->getType();
       if (init_ty->isArrayTy() &&
-          init_ty->getArrayNumElements() > omit_array_size)
+          init_ty->getArrayNumElements() > vectorsynth::omit_array_size)
         continue;
 
       auto storedval = get_operand(gv->getInitializer());
@@ -1143,7 +1143,7 @@ public:
 };
 }
 
-namespace llvm_util {
+namespace vectorsynth {
 
 unsigned omit_array_size = -1;
 

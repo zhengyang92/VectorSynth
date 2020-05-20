@@ -55,7 +55,9 @@ set(SYNTHESIZER_SRC
   "lib/llvm2alive.cpp"
   "lib/synthesizer.cpp"
   "lib/ir.cpp"
-  )
+  "lib/simd.cpp"
+  "lib/constantsynth.cpp"
+)
 
 add_llvm_executable(alive-cs
   "tools/alive-cs.cpp"

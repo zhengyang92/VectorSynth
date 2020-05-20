@@ -2,10 +2,11 @@
 
 
 #include "llvm/IR/IRBuilder.h"
-#include "ir/simd.h"
+#include "simd.h"
 #include <vector>
 
-namespace syn {
+namespace vectorsynth {
+
 class Inst {
 public:
   virtual void print(std::ostream &os) const = 0;

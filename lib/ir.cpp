@@ -1,9 +1,9 @@
-#include "synthesis/ir.h"
+#include "lib/ir.h"
 #include <string>
 
 using namespace std;
 
-namespace syn {
+namespace vectorsynth {
 
 void Var::print(ostream &os) const {
   const char *str = "val ";

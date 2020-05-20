@@ -26,12 +26,11 @@
 #include <map>
 
 using namespace tools;
-using namespace llvm_util;
 using namespace util;
 using namespace std;
 using namespace IR;
 
-namespace syn {
+namespace vectorsynth {
 
 static void findInputs(llvm::Value *Root, std::set<unique_ptr<Var>> &Cands, unsigned Max) {
   // breadth-first search
