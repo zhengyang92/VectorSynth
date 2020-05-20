@@ -12,6 +12,11 @@ endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
+set(CMAKE_CXX_FLAGS                "-Wall -Werror -march=native -fPIC ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG          "-g -Og ${CMAKE_CXX_FLAGS_DEBUG}")
+set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG ${CMAKE_CXX_FLAGS_RELEASE}")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,10 +62,12 @@ add_llvm_executable(alive-cs
 )
 
 add_library(synth STATIC ${SYNTHESIZER_SRC})
-set(ALIVE_LIBS_LLVM synth ${ALIVE_LIBS})
+set(VECTORSYNTH_LIBS_LLVM synth ${ALIVE_LIBS})
 
 find_package(Z3 4.8.5 REQUIRED)
 
 llvm_map_components_to_libnames(llvm_libs support core irreader analysis passes transformutils)
-target_link_libraries(alive-cs PRIVATE ${ALIVE_LIBS_LLVM} ${llvm_libs})
+target_link_libraries(alive-cs PRIVATE ${VECTORSYNTH_LIBS_LLVM} ${llvm_libs})
 target_link_libraries(alive-cs PRIVATE ${Z3_LIBRARIES})
+
+add_subdirectory(pass)

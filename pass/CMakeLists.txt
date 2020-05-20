@@ -1,22 +1,17 @@
-# add_llvm_loadable_module was removed in https://reviews.llvm.org/D51748
-if (COMMAND add_llvm_loadable_module)
-  add_llvm_loadable_module(superoptimizer pass.cpp)
-else()
-  add_llvm_library(superoptimizer MODULE pass.cpp)
-endif()
+add_llvm_library(vectorsynth MODULE pass.cpp)
 
 if (CLANG_PLUGIN)
   message(STATUS "Clang plugin support enabled")
-  set_target_properties(superoptimizer PROPERTIES
+  set_target_properties(vectorsynth PROPERTIES
       COMPILE_FLAGS "-DCLANG_PLUGIN"
   )
 endif()
 
-target_link_libraries(superoptimizer PRIVATE ${ALIVE_LIBS_LLVM} ${Z3_LIBRARIES}
+target_link_libraries(vectorsynth PRIVATE ${VECTORSYNTH_LIBS_LLVM} ${Z3_LIBRARIES}
   $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>)
 
 if(APPLE)
-    set_target_properties(superoptimizer PROPERTIES
+    set_target_properties(vectorsynth PROPERTIES
         LINK_FLAGS "-undefined dynamic_lookup"
     )
 endif(APPLE)
