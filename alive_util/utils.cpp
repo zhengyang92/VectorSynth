@@ -216,6 +216,191 @@ Type* llvm_type2alive(const llvm::Type *ty) {
   }
 }
 
+Value* make_intconst(uint64_t val, int bits) {
+  auto c = make_unique<IntConst>(get_int_type(bits), val);
+  auto ret = c.get();
+  current_fn->addConstant(move(c));
+  return ret;
+}
+
+#define RETURN_CACHE(val)                           \
+  do {                                              \
+    auto val_cpy = val;                             \
+    ENSURE(value_cache.emplace(v, val_cpy).second); \
+    return val_cpy;                                 \
+  } while (0)
+
+Value* get_operand(llvm::Value *v,
+                   function<Value*(llvm::ConstantExpr*)> constexpr_conv,
+                   function<Value*(AggregateValue*)> copy_inserter) {
+  if (auto I = value_cache.find(v);
+      I != value_cache.end())
+    return I->second;
+
+  auto ty = llvm_type2alive(v->getType());
+  if (!ty)
+    return nullptr;
+
+  if (auto cnst = dyn_cast<llvm::ConstantInt>(v)) {
+    unique_ptr<IntConst> c;
+    if (cnst->getBitWidth() <= 64)
+      c = make_unique<IntConst>(*ty, cnst->getZExtValue());
+    else
+      c = make_unique<IntConst>(*ty, cnst->getValue().toString(10, false));
+    auto ret = c.get();
+    current_fn->addConstant(move(c));
+    RETURN_CACHE(ret);
+  }
+
+  if (auto cnst = dyn_cast<llvm::ConstantFP>(v)) {
+    auto &apfloat = cnst->getValueAPF();
+    unique_ptr<FloatConst> c;
+    switch (ty->getAsFloatType()->getFpType()) {
+    case FloatType::Half:
+      c = make_unique<FloatConst>(*ty,
+                                  apfloat.bitcastToAPInt().getLimitedValue());
+      break;
+    case FloatType::Float:
+      c = make_unique<FloatConst>(*ty, apfloat.convertToFloat());
+      break;
+    case FloatType::Double:
+      c = make_unique<FloatConst>(*ty, apfloat.convertToDouble());
+      break;
+    case FloatType::Unknown:
+      UNREACHABLE();
+    }
+    auto ret = c.get();
+    current_fn->addConstant(move(c));
+    RETURN_CACHE(ret);
+  }
+
+  if (isa<llvm::PoisonValue>(v)) {
+    auto val = make_unique<PoisonValue>(*ty);
+    auto ret = val.get();
+    current_fn->addConstant(move(val));
+    RETURN_CACHE(ret);
+  }
+
+  if (isa<llvm::UndefValue>(v)) {
+    auto val = make_unique<UndefValue>(*ty);
+    auto ret = val.get();
+    current_fn->addUndef(move(val));
+    RETURN_CACHE(ret);
+  }
+
+  if (isa<llvm::ConstantPointerNull>(v)) {
+    auto val = make_unique<NullPointerValue>(*ty);
+    auto ret = val.get();
+    current_fn->addConstant(move(val));
+    RETURN_CACHE(ret);
+  }
+
+  if (auto gv = dyn_cast<llvm::GlobalVariable>(v)) {
+    if (hasOpaqueType(gv->getValueType()))
+      // TODO: Global variable of opaque type is not supported.
+      return nullptr;
+
+    unsigned size = DL->getTypeAllocSize(gv->getValueType());
+    unsigned align = gv->getPointerAlignment(*DL).value();
+    string name;
+    if (!gv->hasName()) {
+      unsigned id = 0;
+      auto M = gv->getParent();
+      auto i = M->global_begin(), e = M->global_end();
+      for (; i != e; ++i) {
+        if (i->hasName())
+          continue;
+        if (&(*i) == gv)
+          break;
+        ++id;
+      }
+      assert(i != e);
+      name = '@' + to_string(id);
+    } else {
+      name = '@' + gv->getName().str();
+    }
+    auto val = make_unique<GlobalVariable>(*ty, move(name), size, align,
+                                           gv->isConstant());
+    auto gvar = val.get();
+    current_fn->addConstant(move(val));
+    RETURN_CACHE(gvar);
+  }
+
+  auto fillAggregateValues = [&](AggregateType *aty,
+      function<llvm::Value *(unsigned)> get_elem, vector<Value*> &vals) -> bool
+  {
+    unsigned opi = 0;
+
+    for (unsigned i = 0; i < aty->numElementsConst(); ++i) {
+      if (aty->isPadding(i)) {
+        auto &padty = aty->getChild(i);
+        assert(padty.isIntType());
+        auto poison = make_unique<PoisonValue>(padty);
+        auto ret = poison.get();
+
+        current_fn->addConstant(move(poison));
+        vals.emplace_back(ret);
+      } else {
+        if (auto op = get_operand(get_elem(opi), constexpr_conv, copy_inserter))
+          vals.emplace_back(op);
+        else
+          return false;
+        ++opi;
+      }
+    }
+    return true;
+  };
+
+  if (auto cnst = dyn_cast<llvm::ConstantAggregate>(v)) {
+    vector<Value*> vals;
+    if (!fillAggregateValues(dynamic_cast<AggregateType *>(ty),
+            [&cnst](auto i) { return cnst->getOperand(i); }, vals))
+      return nullptr;
+
+    auto val = make_unique<AggregateValue>(*ty, move(vals));
+    auto ret = val.get();
+    if (all_of(cnst->op_begin(), cnst->op_end(), [](auto &V) -> bool
+        { return isa<llvm::ConstantData>(V); })) {
+      current_fn->addConstant(move(val));
+      RETURN_CACHE(ret);
+    } else {
+      current_fn->addAggregate(move(val));
+      return copy_inserter(ret);
+    }
+  }
+
+  if (auto cnst = dyn_cast<llvm::ConstantDataSequential>(v)) {
+    vector<Value*> vals;
+    if (!fillAggregateValues(dynamic_cast<AggregateType *>(ty),
+            [&cnst](auto i) { return cnst->getElementAsConstant(i); }, vals))
+      return nullptr;
+
+    auto val = make_unique<AggregateValue>(*ty, move(vals));
+    auto ret = val.get();
+    current_fn->addConstant(move(val));
+    RETURN_CACHE(ret);
+  }
+
+  if (auto cnst = dyn_cast<llvm::ConstantAggregateZero>(v)) {
+    vector<Value*> vals;
+    if (!fillAggregateValues(dynamic_cast<AggregateType *>(ty),
+            [&cnst](auto i) { return cnst->getElementValue(i); }, vals))
+      return nullptr;
+
+    auto val = make_unique<AggregateValue>(*ty, move(vals));
+    auto ret = val.get();
+    current_fn->addConstant(move(val));
+    RETURN_CACHE(ret);
+  }
+
+  if (auto cexpr = dyn_cast<llvm::ConstantExpr>(v)) {
+    return constexpr_conv(cexpr);
+  }
+
+  return nullptr;
+}
+
+
 void add_identifier(const llvm::Value &llvm, Value &v) {
   value_cache.emplace(&llvm, &v);
 }
