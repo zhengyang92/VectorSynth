@@ -16,94 +16,101 @@ using namespace tools;
 using namespace util;
 using namespace std;
 
+static void instantiate_undef(const Input *in, map<expr, expr> &instances,
+                              map<expr, expr> &instances2, const Type &ty,
+                              unsigned child) {
+  if (auto agg = ty.getAsAggregateType()) {
+    for (unsigned i = 0, e = agg->numElementsConst(); i < e; ++i) {
+      if (!agg->isPadding(i))
+        instantiate_undef(in, instances, instances2, agg->getChild(i),
+                          child + i);
+    }
+    return;
+  }
+
+  // Bail out if it gets too big. It's unlikely we can solve it anyway.
+  if (instances.size() >= 128 || hit_half_memory_limit())
+    return;
+
+  auto var = in->getUndefVar(ty, child);
+  if (!var.isValid())
+    return;
+
+  // TODO: add support for per-bit input undef
+  assert(var.bits() == 1);
+
+  expr nums[2] = { expr::mkUInt(0, 1), expr::mkUInt(1, 1) };
+
+  for (auto &[e, v] : instances) {
+    for (unsigned i = 0; i < 2; ++i) {
+      expr newexpr = e.subst(var, nums[i]);
+      if (newexpr.eq(e)) {
+        instances2[move(newexpr)] = v;
+        break;
+      }
+
+      newexpr = newexpr.simplify();
+      if (newexpr.isFalse())
+        continue;
+
+      // keep 'var' variables for counterexample printing
+      instances2.try_emplace(move(newexpr), v && var == nums[i]);
+    }
+  }
+  instances = move(instances2);
+}
+
 // borrowed from alive2
 static expr preprocess(Transform &t, const set<expr> &qvars0,
-                       const set<expr> &undef_qvars, expr && e) {
-
+                       const set<expr> &undef_qvars, expr &&e) {
   if (hit_half_memory_limit())
     return expr::mkForAll(qvars0, move(e));
 
-
-  // TODO: benchmark
-  if (0) {
-    expr var = expr::mkBoolVar("malloc_never_fails");
-    e = expr::mkIf(var,
-                   e.subst(var, true).simplify(),
-                   e.subst(var, false).simplify());
-  }
-
   // eliminate all quantified boolean vars; Z3 gets too slow with those
   auto qvars = qvars0;
-  for (auto &var : qvars0) {
-    if (!var.isBool())
+  for (auto I = qvars.begin(); I != qvars.end(); ) {
+    auto &var = *I;
+    if (!var.isBool()) {
+      ++I;
       continue;
-    e = e.subst(var, true).simplify() &&
-      e.subst(var, false).simplify();
-    qvars.erase(var);
+    }
+    if (hit_half_memory_limit())
+      break;
+
+    e = (e.subst(var, true) && e.subst(var, false)).simplify();
+    I = qvars.erase(I);
   }
-  // TODO: maybe try to instantiate undet_xx vars?
-  if (undef_qvars.empty() || hit_half_memory_limit())
+
+  if (config::disable_undef_input || undef_qvars.empty() ||
+      hit_half_memory_limit())
     return expr::mkForAll(qvars, move(e));
 
-  // manually instantiate all ty_%v vars
+  // manually instantiate undef masks
   map<expr, expr> instances({ { move(e), true } });
   map<expr, expr> instances2;
 
-  expr nums[3] = { expr::mkUInt(0, 2), expr::mkUInt(1, 2), expr::mkUInt(2, 2) };
-
   for (auto &i : t.src.getInputs()) {
-    auto in = dynamic_cast<const Input*>(&i);
-    if (!in)
-      continue;
-    auto var = in->getTyVar();
-
-    for (auto &[e, v] : instances) {
-      for (unsigned i = 0; i <= 2; ++i) {
-        if (config::disable_undef_input && i == 1)
-          continue;
-        if (config::disable_poison_input && i == 2)
-          continue;
-
-        expr newexpr = e.subst(var, nums[i]);
-        if (newexpr.eq(e)) {
-          instances2[move(newexpr)] = v;
-          break;
-        }
-
-        newexpr = newexpr.simplify();
-        if (newexpr.isFalse())
-          continue;
-
-        // keep 'var' variables for counterexample printing
-        instances2.try_emplace(move(newexpr), v && var == nums[i]);
-      }
-    }
-    instances = move(instances2);
-
-    // Bail out if it gets too big. It's very likely we can't solve it anyway.
-    if (instances.size() >= 128 || hit_half_memory_limit())
-      break;
+    if (auto in = dynamic_cast<const Input*>(&i))
+      instantiate_undef(in, instances, instances2, i.getType(), 0);
   }
+
   expr insts(false);
   for (auto &[e, v] : instances) {
     insts |= expr::mkForAll(qvars, move(const_cast<expr&>(e))) && v;
   }
-
-  // TODO: try out instantiating the undefs in forall quantifier
-
   return insts;
 }
 
-static bool is_undef(const expr &e) {
+static bool is_arbitrary(const expr &e) {
   if (e.isConst())
     return false;
-  return check_expr(expr::mkForAll(e.vars(), expr::mkVar("#undef", e) != e)).
+  return check_expr(expr::mkForAll(e.vars(), expr::mkVar("#someval", e) != e)).
            isUnsat();
 }
 
 static void print_single_varval(ostream &os, State &st, const Model &m,
                                 const Value *var, const Type &type,
-                                const StateValue &val) {
+                                const StateValue &val, unsigned child) {
   if (!val.isValid()) {
     os << "(invalid expr)";
     return;
@@ -119,18 +126,18 @@ static void print_single_varval(ostream &os, State &st, const Model &m,
   }
 
   if (auto *in = dynamic_cast<const Input*>(var)) {
-    uint64_t n;
-    ENSURE(m[in->getTyVar()].isUInt(n));
-    if (n == 1) {
+    auto var = in->getUndefVar(type, child);
+    if (var.isValid() && m.eval(var, false).isAllOnes()) {
       os << "undef";
       return;
     }
-    assert(n == 0);
   }
 
+  // TODO: detect undef bits (total or partial) with an SMT query
+
   expr partial = m.eval(val.value);
-  if (is_undef(partial)) {
-    os << "undef";
+  if (is_arbitrary(partial)) {
+    os << "any";
     return;
   }
 
@@ -141,21 +148,20 @@ static void print_single_varval(ostream &os, State &st, const Model &m,
   if (!partial.isConst()) {
     // some functions / vars may not have an interpretation because it's not
     // needed, not because it's undef
-    bool found_undef = false;
     for (auto &var : partial.vars()) {
-      if ((found_undef = isUndef(var)))
+      if (isUndef(var)) {
+        os << "\t[based on undef value]";
         break;
+      }
     }
-    if (found_undef)
-      os << "\t[based on undef value]";
   }
 }
 
 static void print_varval(ostream &os, State &st, const Model &m,
                          const Value *var, const Type &type,
-                         const StateValue &val) {
+                         const StateValue &val, unsigned child = 0) {
   if (!type.isAggregateType()) {
-    print_single_varval(os, st, m, var, type, val);
+    print_single_varval(os, st, m, var, type, val, child);
     return;
   }
 
@@ -164,7 +170,8 @@ static void print_varval(ostream &os, State &st, const Model &m,
   for (unsigned i = 0, e = agg->numElementsConst(); i < e; ++i) {
     if (i != 0)
       os << ", ";
-    print_varval(os, st, m, var, agg->getChild(i), agg->extract(val, i));
+    print_varval(os, st, m, var, agg->getChild(i), agg->extract(val, i),
+                 child + i);
   }
   os << (type.isStructType() ? " }" : " >");
 }
@@ -178,6 +185,18 @@ static void error(Errors &errs, State &src_state, State &tgt_state,
 
   if (r.isInvalid()) {
     errs.add("Invalid expr", false);
+    auto &unsupported = src_state.getUnsupported();
+    if (!unsupported.empty()) {
+      string str = "The program uses the following unsupported features: ";
+      bool first = true;
+      for (auto name : unsupported) {
+        if (!first)
+          str += ", ";
+        str += name;
+        first = false;
+      }
+      errs.add(move(str), false);
+    }
     return;
   }
 
@@ -206,8 +225,7 @@ static void error(Errors &errs, State &src_state, State &tgt_state,
     s << " for " << *var;
   s << "\n\nExample:\n";
 
-  for (auto &[var, val, used] : src_state.getValues()) {
-    (void)used;
+  for (auto &[var, val] : src_state.getValues()) {
     if (!dynamic_cast<const Input*>(var) &&
         !dynamic_cast<const ConstantInput*>(var))
       continue;
@@ -226,8 +244,7 @@ static void error(Errors &errs, State &src_state, State &tgt_state,
       }
     }
 
-    for (auto &[var, val, used] : st->getValues()) {
-      (void)used;
+    for (auto &[var, val] : st->getValues()) {
       auto &name = var->getName();
       if (name == var_name)
         break;
@@ -249,6 +266,26 @@ static void error(Errors &errs, State &src_state, State &tgt_state,
   print_var_val(s, m);
   errs.add(s.str(), true);
 }
+
+/*
+
+    for (auto &[var, val, used] : st->getValues()) {
+      (void)used;
+      auto &name = var->getName();
+      if (name == var_name)
+        break;
+
+      if (name[0] != '%' ||
+          dynamic_cast<const Input*>(var) ||
+          (check_each_var && !seen_vars.insert(name).second))
+        continue;
+
+      s << *var << " = ";
+      print_varval(s, const_cast<State&>(*st), m, var, var->getType(),
+                   val.first);
+      s << '\n';
+    }
+*/
 
 namespace vectorsynth {
 
@@ -284,8 +321,7 @@ Errors ConstantSynth::synthesize(unordered_map<const Input*, expr> &result) cons
 
   Errors errs;
 
-  for (auto &[var, val, used] : src_state.getValues()) {
-    (void)used;
+  for (auto &[var, val] : src_state.getValues()) {
     if (!dynamic_cast<const Input*>(var))
       continue;
 
@@ -389,8 +425,7 @@ Errors ConstantSynth::synthesize(unordered_map<const Input*, expr> &result) cons
           stringstream s;
           auto &m = r.getModel();
           s << ";result\n";
-          for (auto &[var, val, used] : tgt_state.getValues()) {
-            (void)used;
+          for (auto &[var, val] : tgt_state.getValues()) {
             if (!dynamic_cast<const Input*>(var) &&
                 !dynamic_cast<const ConstantInput*>(var))
                 continue;

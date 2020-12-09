@@ -127,7 +127,7 @@ static bool getSketches(set<unique_ptr<Var>> &Inputs, llvm::Value *V,
         continue;
       llvm::VectorType *vty = llvm::cast<llvm::FixedVectorType>(ty);
       SIMDBinOp::Op op = static_cast<SIMDBinOp::Op>(K);
-      if (SIMDBinOp::binop_ret_v[op].first != vty->getNumElements())
+      if (SIMDBinOp::binop_ret_v[op].first != vty->getElementCount().getKnownMinValue())
         continue;
       if (SIMDBinOp::binop_ret_v[op].second != vty->getScalarSizeInBits())
         continue;
@@ -142,7 +142,7 @@ static bool getSketches(set<unique_ptr<Var>> &Inputs, llvm::Value *V,
             if (!L->V()->getType()->isVectorTy())
               continue;
             llvm::VectorType *aty = llvm::cast<llvm::FixedVectorType>(L->V()->getType());
-            if (SIMDBinOp::binop_op0_v[op].first  != aty->getNumElements())
+            if (SIMDBinOp::binop_op0_v[op].first  != aty->getElementCount().getKnownMinValue())
               continue;
             if (SIMDBinOp::binop_op0_v[op].second != aty->getScalarSizeInBits()) {
               continue;
@@ -153,7 +153,7 @@ static bool getSketches(set<unique_ptr<Var>> &Inputs, llvm::Value *V,
             if (!R->V()->getType()->isVectorTy())
               continue;
             llvm::VectorType *bty = llvm::cast<llvm::FixedVectorType>(R->V()->getType());
-            if (SIMDBinOp::binop_op1_v[op].first  != bty->getNumElements())
+            if (SIMDBinOp::binop_op1_v[op].first  != bty->getElementCount().getKnownMinValue())
               continue;
             if (SIMDBinOp::binop_op1_v[op].second != bty->getScalarSizeInBits())
               continue;
@@ -337,7 +337,7 @@ static bool constantSynthesis(IR::Function &Func1, IR::Function &Func2,
       llvm::FixedVectorType *vty = llvm::cast<llvm::FixedVectorType>(lty);
       llvm::IntegerType *ety = llvm::cast<llvm::IntegerType>(vty->getElementType());
       vector<llvm::Constant *> v;
-      for (int i = vty->getNumElements() - 1 ; i >= 0 ; i --) {
+      for (int i = vty->getElementCount().getKnownMinValue() - 1 ; i >= 0 ; i --) {
         unsigned bits = ety->getBitWidth();
         auto elem = trunk.extract((i + 1) * bits - 1, i * bits);
         // TODO: support undef

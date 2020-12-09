@@ -22,7 +22,8 @@ class Value;
 namespace vectorsynth {
 
 // returned bool indicates whether it's a known function call
-std::pair<std::unique_ptr<IR::Instr>, bool>
+std::tuple<std::unique_ptr<IR::Instr>, IR::FnAttrs, std::vector<IR::ParamAttrs>,
+           bool>
 known_call(llvm::CallInst &i, const llvm::TargetLibraryInfo &TLI,
            IR::BasicBlock &BB, const std::vector<IR::Value*> &args);
 

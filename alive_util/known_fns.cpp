@@ -13,17 +13,26 @@
 using namespace IR;
 using namespace std;
 
-#define RETURN_KNOWN(op)    return { op, true }
-#define RETURN_FAIL_KNOWN() return { nullptr, true }
+#define RETURN_KNOWN(op) \
+  return { op, move(attrs), move(param_attrs), true }
+#define RETURN_KNOWN_ATTRS() \
+  return { nullptr, move(attrs), move(param_attrs), true }
+#define RETURN_UNKNOWN_KNOWN() \
+  return { nullptr, move(attrs), move(param_attrs), false }
+#define RETURN_UNKNOWN() \
+  return { nullptr, move(attrs), move(param_attrs), true }
 
 namespace vectorsynth {
 
-pair<unique_ptr<Instr>, bool>
+tuple<unique_ptr<Instr>, FnAttrs, vector<ParamAttrs>, bool>
 known_call(llvm::CallInst &i, const llvm::TargetLibraryInfo &TLI,
            BasicBlock &BB, const vector<Value*> &args) {
+  FnAttrs attrs;
+  vector<ParamAttrs> param_attrs;
+
   auto ty = llvm_type2alive(i.getType());
   if (!ty)
-    RETURN_FAIL_KNOWN();
+    RETURN_UNKNOWN();
 
   // TODO: add support for checking mismatch of C vs C++ alloc fns
   if (llvm::isMallocLikeFn(&i, &TLI, false)) {
@@ -37,10 +46,30 @@ known_call(llvm::CallInst &i, const llvm::TargetLibraryInfo &TLI,
     RETURN_KNOWN(make_unique<Free>(*args[0]));
   }
 
+  auto set_param = [&](unsigned i, ParamAttrs::Attribute attr) {
+    if (param_attrs.size() <= i)
+      param_attrs.resize(i+1);
+    param_attrs[i].set(attr);
+  };
+
+  auto ret_and_args_no_undef = [&]() {
+    if (!dynamic_cast<VoidType*>(ty))
+      attrs.set(FnAttrs::NoUndef);
+    for (unsigned i = 0, e = args.size(); i < e; ++i) {
+      set_param(i, ParamAttrs::NoUndef);
+    }
+  };
+
+  auto fputc_attr = [&]() {
+    ret_and_args_no_undef();
+    attrs.set(FnAttrs::NoThrow);
+    set_param(1, ParamAttrs::NoCapture);
+  };
+
   auto decl = i.getCalledFunction();
   llvm::LibFunc libfn;
   if (!decl || !TLI.getLibFunc(*decl, libfn) || !TLI.has(libfn))
-    return { nullptr, false };
+    RETURN_UNKNOWN();
 
   switch (libfn) {
   case llvm::LibFunc_memset: // void* memset(void *ptr, int val, size_t bytes)
@@ -60,8 +89,118 @@ known_call(llvm::CallInst &i, const llvm::TargetLibraryInfo &TLI,
       }
     }
     RETURN_KNOWN(make_unique<Strlen>(*ty, value_name(i), *args[0]));
+  case llvm::LibFunc_memcmp:
+  case llvm::LibFunc_bcmp: {
+    RETURN_KNOWN(
+      make_unique<Memcmp>(*ty, value_name(i), *args[0], *args[1], *args[2],
+                          libfn == llvm::LibFunc_bcmp));
+  }
+  case llvm::LibFunc_ffs:
+  case llvm::LibFunc_ffsl:
+  case llvm::LibFunc_ffsll: {
+    bool needs_trunc = &args[0]->getType() != ty;
+    auto *Op = new UnaryOp(args[0]->getType(),
+                           value_name(i) + (needs_trunc ? "#beftrunc" : ""),
+                           *args[0], UnaryOp::FFS);
+    if (!needs_trunc)
+      RETURN_KNOWN(unique_ptr<UnaryOp>(Op));
+
+    BB.addInstr(unique_ptr<UnaryOp>(Op));
+    RETURN_KNOWN(
+      make_unique<ConversionOp>(*ty, value_name(i), *Op, ConversionOp::Trunc));
+  }
+  case llvm::LibFunc_fabs:
+  case llvm::LibFunc_fabsf: {
+    RETURN_KNOWN(
+      make_unique<UnaryOp>(*ty, value_name(i), *args[0], UnaryOp::FAbs,
+                           parse_fmath(i)));
+  }
+
+  case llvm::LibFunc_fwrite: {
+    auto size = getInt(*args[1]);
+    auto count = getInt(*args[2]);
+    if (size && count) {
+      auto bytes = *size * *count;
+      // size_t fwrite(const void *ptr, 0, 0, FILE *stream) -> 0
+      if (bytes == 0)
+        RETURN_KNOWN(
+          make_unique<UnaryOp>(*ty, value_name(i),
+                               *make_intconst(0, ty->bits()), UnaryOp::Copy));
+
+      // (void)fwrite(const void *ptr, 1, 1, FILE *stream) ->
+      //   (void)fputc(int c, FILE *stream))
+      if (bytes == 1 && i.use_empty() && TLI.has(llvm::LibFunc_fputc)) {
+        fputc_attr();
+        auto &byteTy = get_int_type(8); // FIXME
+        auto &i32 = get_int_type(32);
+        auto call
+          = make_unique<FnCall>(i32, value_name(i), "@fputc", move(attrs));
+        auto load
+          = make_unique<Load>(byteTy, value_name(i) + "#load", *args[0], 1);
+        auto load_zext
+           = make_unique<ConversionOp>(i32, value_name(i) + "#zext", *load,
+                                       ConversionOp::ZExt);
+        call->addArg(*load_zext, move(param_attrs[0]));
+        call->addArg(*args[3], move(param_attrs[1]));
+        BB.addInstr(move(load));
+        BB.addInstr(move(load_zext));
+        RETURN_KNOWN(move(call));
+      }
+    }
+    ret_and_args_no_undef();
+    attrs.set(FnAttrs::NoThrow);
+    set_param(0, ParamAttrs::NoCapture);
+    set_param(3, ParamAttrs::NoCapture);
+    RETURN_KNOWN_ATTRS();
+  }
+
+  case llvm::LibFunc_fputc:
+  case llvm::LibFunc_fputc_unlocked:
+  case llvm::LibFunc_fstat:
+    fputc_attr();
+    RETURN_KNOWN_ATTRS();
+
+  case llvm::LibFunc_fseek:
+  case llvm::LibFunc_ftell:
+  case llvm::LibFunc_fgetc:
+  case llvm::LibFunc_fgetc_unlocked:
+  case llvm::LibFunc_fseeko:
+  case llvm::LibFunc_ftello:
+  case llvm::LibFunc_fileno:
+  case llvm::LibFunc_fflush:
+  case llvm::LibFunc_fclose:
+  case llvm::LibFunc_fsetpos:
+  case llvm::LibFunc_ftrylockfile:
+    ret_and_args_no_undef();
+    attrs.set(FnAttrs::NoThrow);
+    set_param(0, ParamAttrs::NoCapture);
+    RETURN_KNOWN_ATTRS();
+
+  case llvm::LibFunc_ferror:
+    ret_and_args_no_undef();
+    attrs.set(FnAttrs::NoThrow);
+    attrs.set(FnAttrs::NoWrite);
+    attrs.set(FnAttrs::NoFree);
+    set_param(0, ParamAttrs::NoCapture);
+    RETURN_KNOWN_ATTRS();
+
+  case llvm::LibFunc_fread:
+  case llvm::LibFunc_fread_unlocked:
+    ret_and_args_no_undef();
+    attrs.set(FnAttrs::NoThrow);
+    set_param(0, ParamAttrs::NoCapture);
+    set_param(3, ParamAttrs::NoCapture);
+    RETURN_KNOWN_ATTRS();
+
+  case llvm::LibFunc_perror:
+    ret_and_args_no_undef();
+    attrs.set(FnAttrs::NoThrow);
+    set_param(0, ParamAttrs::NoCapture);
+    set_param(0, ParamAttrs::ReadOnly);
+    RETURN_KNOWN_ATTRS();
+
   default:
-    RETURN_FAIL_KNOWN();
+    RETURN_UNKNOWN_KNOWN();
   }
 }
 
