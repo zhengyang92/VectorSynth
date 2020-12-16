@@ -1,8 +1,8 @@
 // Copyright (c) 2020-present, author: Zhengyang Liu (liuz@cs.utah.edu).
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "lib/ir.h"
-#include "lib/constantsynth.h"
+#include "ir.h"
+#include "constantsynth.h"
 #include "smt/smt.h"
 #include "tools/transform.h"
 #include "util/symexec.h"
@@ -303,6 +303,7 @@ static bool compareFunctions(IR::Function &Func1, IR::Function &Func2,
   return result;
 }
 
+#if (false)
 static bool constantSynthesis(IR::Function &Func1, IR::Function &Func2,
                               unsigned &goodCount,
                               unsigned &badCount, unsigned &errorCount,
@@ -354,6 +355,7 @@ static bool constantSynthesis(IR::Function &Func1, IR::Function &Func2,
 
   return ret;
 }
+#endif
 
 static set<llvm::Function *> IntrinsicDecls;
 static llvm::Value *codeGen(Inst *I, llvm::IRBuilder<> &b,
@@ -546,7 +548,6 @@ static void removeUnusedDecls () {
   IntrinsicDecls.clear();
 }
 
-
   //void optimizeFunction(llvm::Function &F) {
 static void DCE(llvm::Function &F) {
   llvm::LoopAnalysisManager LAM;
@@ -645,23 +646,31 @@ bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
       while (!Fns.empty()) {
         auto [GF, G, HaveC] = Fns.top();
         Fns.pop();
+        cout<<GF<<endl;
         auto Func1 = llvm_util::llvm2alive(F1, *TLI);
         unsigned goodCount = 0, badCount = 0, errorCount = 0;
         if (!HaveC) {
           auto Func2 = llvm_util::llvm2alive(*GF, *TLI);
+          cout<<"foo1"<<endl;
           result |= compareFunctions(*Func1, *Func2, goodCount, badCount, errorCount);
         } else {
+          #if (false)
           inputMap.clear();
           constMap.clear();
           auto Func2 = llvm_util::llvm2alive(*GF, *TLI);
           result |= constantSynthesis(*Func1, *Func2, goodCount, badCount, errorCount, inputMap, constMap);
+          #endif
+          cout<<"foo"<<endl;
         }
+        cout<<"foo4"<<endl;
         GF->eraseFromParent();
         if (goodCount) {
           R = G;
           break;
         }
+        cout<<"foo5"<<endl;
       }
+                cout<<"foo3"<<endl;
       while (!Fns.empty()) {
         auto [GF, G, HaveC] = Fns.top();
         Fns.pop();
@@ -683,7 +692,5 @@ bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
   removeUnusedDecls();
   return false;
 }
-
-
 
 };

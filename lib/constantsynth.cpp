@@ -1,7 +1,7 @@
 // Copyright (c) 2020-present, author: Zhengyang Liu (liuz@cs.utah.edu).
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "lib/constantsynth.h"
+#include "constantsynth.h"
 #include "ir/globals.h"
 #include "smt/smt.h"
 #include "util/config.h"
@@ -267,26 +267,6 @@ static void error(Errors &errs, State &src_state, State &tgt_state,
   errs.add(s.str(), true);
 }
 
-/*
-
-    for (auto &[var, val, used] : st->getValues()) {
-      (void)used;
-      auto &name = var->getName();
-      if (name == var_name)
-        break;
-
-      if (name[0] != '%' ||
-          dynamic_cast<const Input*>(var) ||
-          (check_each_var && !seen_vars.insert(name).second))
-        continue;
-
-      s << *var << " = ";
-      print_varval(s, const_cast<State&>(*st), m, var, var->getType(),
-                   val.first);
-      s << '\n';
-    }
-*/
-
 namespace vectorsynth {
 
 ConstantSynth::ConstantSynth(Transform &t, bool check_each_var) :
@@ -343,11 +323,6 @@ Errors ConstantSynth::synthesize(unordered_map<const Input*, expr> &result) cons
     config::dbg()<<"constant synthesizer now only supports synthesizing integers and vector of integers"<<std::endl;
     return errs;
   }
-  /*
-  for (auto e : src_state.getForAlls()) {
-    qvars.insert(e);
-    }*/
-
   auto dom_a = src_state.returnDomain()();
   auto dom_b = tgt_state.returnDomain()();
 

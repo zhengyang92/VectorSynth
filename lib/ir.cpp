@@ -1,4 +1,4 @@
-#include "lib/ir.h"
+#include "ir.h"
 #include <string>
 
 using namespace std;

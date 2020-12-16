@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lib/simd.h"
+#include "simd.h"
 #include "llvm/IR/IRBuilder.h"
 #include <vector>
 
