@@ -302,6 +302,7 @@ static bool compareFunctions(IR::Function &Func1, IR::Function &Func2,
 
   return result;
 }
+
 static bool constantSynthesis(IR::Function &Func1, IR::Function &Func2,
                               unsigned &goodCount,
                               unsigned &badCount, unsigned &errorCount,

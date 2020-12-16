@@ -62,4 +62,4 @@ llvm_map_components_to_libnames(llvm_libs support core irreader analysis passes 
 target_link_libraries(alive-cs PRIVATE ${VECTORSYNTH_LIBS_LLVM} ${llvm_libs})
 target_link_libraries(alive-cs PRIVATE ${Z3_LIBRARIES})
 
-#add_subdirectory(pass)
+add_subdirectory(pass)
