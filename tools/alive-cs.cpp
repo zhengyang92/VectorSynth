@@ -1,7 +1,6 @@
 // Copyright (c) 2020-present, author: Zhengyang Liu (liuz@cs.utah.edu).
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "alive_util/llvm2alive.h"
 #include "lib/constantsynth.h"
 #include "ir/type.h"
 #include "ir/instr.h"
@@ -13,6 +12,7 @@
 #include "util/config.h"
 #include "util/symexec.h"
 #include "util/errors.h"
+#include "llvm_util/llvm2alive.h"
 
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
   llvm::Function &F2 = *(M2.get()->getFunction("foo"));
 
   unsigned /*goodCount = 0, badCount = 0,*/ errorCount = 0;
-  auto Func1 = vectorsynth::llvm2alive(F1, llvm::TargetLibraryInfoWrapperPass(targetTriple)
+  auto Func1 = llvm_util::llvm2alive(F1, llvm::TargetLibraryInfoWrapperPass(targetTriple)
                                        .getTLI(F1));
 
   if (!Func1) {
@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
     return true;
   }
 
-  auto Func2 = vectorsynth::llvm2alive(F2, llvm::TargetLibraryInfoWrapperPass(targetTriple)
+  auto Func2 = llvm_util::llvm2alive(F2, llvm::TargetLibraryInfoWrapperPass(targetTriple)
                                        .getTLI(F2), Func1->getGlobalVarNames());
   if (!Func2) {
     cerr << "ERROR: Could not translate '" << F2.getName().str()

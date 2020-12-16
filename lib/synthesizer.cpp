@@ -1,7 +1,6 @@
 // Copyright (c) 2020-present, author: Zhengyang Liu (liuz@cs.utah.edu).
 // Distributed under the MIT license that can be found in the LICENSE file.
 
-#include "alive_util/llvm2alive.h"
 #include "lib/ir.h"
 #include "lib/constantsynth.h"
 #include "smt/smt.h"
@@ -9,6 +8,7 @@
 #include "util/symexec.h"
 #include "util/config.h"
 #include "util/version.h"
+#include "llvm_util/llvm2alive.h"
 
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
@@ -567,7 +567,7 @@ static void DCE(llvm::Function &F) {
   FPM.run(F, FAM);
 }
 
-bool synthesize (llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
+bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
   config::disable_undef_input = true;
   config::disable_poison_input = true;
 
@@ -644,15 +644,15 @@ bool synthesize (llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
       while (!Fns.empty()) {
         auto [GF, G, HaveC] = Fns.top();
         Fns.pop();
-        auto Func1 = llvm2alive(F1, *TLI);
+        auto Func1 = llvm_util::llvm2alive(F1, *TLI);
         unsigned goodCount = 0, badCount = 0, errorCount = 0;
         if (!HaveC) {
-          auto Func2 = llvm2alive(*GF, *TLI);
+          auto Func2 = llvm_util::llvm2alive(*GF, *TLI);
           result |= compareFunctions(*Func1, *Func2, goodCount, badCount, errorCount);
         } else {
           inputMap.clear();
           constMap.clear();
-          auto Func2 = llvm2aliveCM(*GF, *TLI, {}, &inputMap);
+          auto Func2 = llvm_util::llvm2alive(*GF, *TLI);
           result |= constantSynthesis(*Func1, *Func2, goodCount, badCount, errorCount, inputMap, constMap);
         }
         GF->eraseFromParent();

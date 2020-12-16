@@ -12,6 +12,8 @@ endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CXX_FLAGS                "-Wall -Werror -march=native -fPIC ${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG          "-g -Og ${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG ${CMAKE_CXX_FLAGS_RELEASE}")
@@ -34,14 +36,6 @@ find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-if (NOT LLVM_ENABLE_RTTI)
-  message(FATAL_ERROR "LLVM must be built with '-DLLVM_ENABLE_RTTI=ON'")
-endif()
-
-if (NOT LLVM_ENABLE_EH)
-  message(FATAL_ERROR "LLVM must be built with '-DLLVM_ENABLE_EH=ON'")
-endif()
-
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 include(AddLLVM)
 
@@ -53,9 +47,6 @@ set(SYNTHESIZER_SRC
   "lib/ir.cpp"
   "lib/simd.cpp"
   "lib/synthesizer.cpp"
-  "alive_util/known_fns.cpp"
-  "alive_util/llvm2alive.cpp"
-  "alive_util/utils.cpp"
 )
 
 add_llvm_executable(alive-cs
@@ -71,4 +62,4 @@ llvm_map_components_to_libnames(llvm_libs support core irreader analysis passes 
 target_link_libraries(alive-cs PRIVATE ${VECTORSYNTH_LIBS_LLVM} ${llvm_libs})
 target_link_libraries(alive-cs PRIVATE ${Z3_LIBRARIES})
 
-add_subdirectory(pass)
+#add_subdirectory(pass)
