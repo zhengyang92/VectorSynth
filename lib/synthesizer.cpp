@@ -642,16 +642,13 @@ bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
 
         Fns.push(make_tuple(GF, G.get(), !Sketch.second.empty()));
       }
-
       while (!Fns.empty()) {
         auto [GF, G, HaveC] = Fns.top();
         Fns.pop();
-        cout<<GF<<endl;
         auto Func1 = llvm_util::llvm2alive(F1, *TLI);
         unsigned goodCount = 0, badCount = 0, errorCount = 0;
         if (!HaveC) {
           auto Func2 = llvm_util::llvm2alive(*GF, *TLI);
-          cout<<"foo1"<<endl;
           result |= compareFunctions(*Func1, *Func2, goodCount, badCount, errorCount);
         } else {
           #if (false)
@@ -660,17 +657,13 @@ bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
           auto Func2 = llvm_util::llvm2alive(*GF, *TLI);
           result |= constantSynthesis(*Func1, *Func2, goodCount, badCount, errorCount, inputMap, constMap);
           #endif
-          cout<<"foo"<<endl;
         }
-        cout<<"foo4"<<endl;
         GF->eraseFromParent();
         if (goodCount) {
           R = G;
           break;
         }
-        cout<<"foo5"<<endl;
       }
-                cout<<"foo3"<<endl;
       while (!Fns.empty()) {
         auto [GF, G, HaveC] = Fns.top();
         Fns.pop();
