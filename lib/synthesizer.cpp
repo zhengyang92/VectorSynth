@@ -69,8 +69,8 @@ static bool getSketches(set<unique_ptr<Var>> &Inputs, llvm::Value *V,
     Comps.emplace_back(I.get());
   }
 
-  auto RC1 = make_unique<ReservedConst>(nullptr);
-  Comps.emplace_back(RC1.get());
+  //auto RC1 = make_unique<ReservedConst>(nullptr);
+  //Comps.emplace_back(RC1.get());
   llvm::Type *ty = V->getType();
   for (unsigned K = BinOp::Op::band; K <= BinOp::Op::mul; K++) {
     for (auto Op0 = Comps.begin(); Op0 != Comps.end(); ++Op0) {
@@ -126,6 +126,10 @@ static bool getSketches(set<unique_ptr<Var>> &Inputs, llvm::Value *V,
       if (!ty->isVectorTy())
         continue;
       llvm::VectorType *vty = llvm::cast<llvm::FixedVectorType>(ty);
+      // FIX: Better typecheck
+      if (!vty->getElementType()->isIntegerTy())
+        continue;
+
       SIMDBinOp::Op op = static_cast<SIMDBinOp::Op>(K);
       if (SIMDBinOp::binop_ret_v[op].first != vty->getElementCount().getKnownMinValue())
         continue;
@@ -137,11 +141,14 @@ static bool getSketches(set<unique_ptr<Var>> &Inputs, llvm::Value *V,
           Inst *I = nullptr, *J = nullptr;
           set<unique_ptr<ReservedConst>> RCs;
 
+          // syntactic prunning
           if (auto L = dynamic_cast<Var *> (*Op0)) {
             // typecheck for op0
             if (!L->V()->getType()->isVectorTy())
               continue;
             llvm::VectorType *aty = llvm::cast<llvm::FixedVectorType>(L->V()->getType());
+            // FIX: Better typecheck
+            if (aty != vty) continue;
             if (SIMDBinOp::binop_op0_v[op].first  != aty->getElementCount().getKnownMinValue())
               continue;
             if (SIMDBinOp::binop_op0_v[op].second != aty->getScalarSizeInBits()) {
@@ -153,6 +160,8 @@ static bool getSketches(set<unique_ptr<Var>> &Inputs, llvm::Value *V,
             if (!R->V()->getType()->isVectorTy())
               continue;
             llvm::VectorType *bty = llvm::cast<llvm::FixedVectorType>(R->V()->getType());
+            // FIX: Better typecheck
+            if (bty != vty) continue;
             if (SIMDBinOp::binop_op1_v[op].first  != bty->getElementCount().getKnownMinValue())
               continue;
             if (SIMDBinOp::binop_op1_v[op].second != bty->getScalarSizeInBits())
@@ -399,6 +408,7 @@ static llvm::Value *codeGen(Inst *I, llvm::IRBuilder<> &b,
     auto op1 = codeGen(B->R(), b, VMap, F, constMap);
     llvm::Function *Intr = nullptr;
     llvm::Module *M = F.getParent();
+    cout<<B->K()<<endl;
     switch (B->K()) {
     case SIMDBinOp::Op::x86_avx2_packssdw:
       Intr = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::x86_avx2_packssdw);
@@ -515,6 +525,9 @@ static llvm::Value *codeGen(Inst *I, llvm::IRBuilder<> &b,
       UNREACHABLE();
     }
     IntrinsicDecls.insert(Intr);
+    Intr->dump();
+    op0->dump();
+    op1->dump();
     return llvm::CallInst::Create(Intr, llvm::ArrayRef<llvm::Value *>({op0, op1}), "intr", llvm::cast<llvm::Instruction>(b.GetInsertPoint()));
   } else if (auto RC = dynamic_cast<ReservedConst *>(I)) {
     if (!constMap) {
@@ -563,8 +576,6 @@ static void DCE(llvm::Function &F) {
   PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
   llvm::FunctionPassManager FPM;
-  /*    PB.buildFunctionSimplificationPipeline(llvm::PassBuilder::OptimizationLevel::O0,
-        llvm::PassBuilder::ThinLTOPhase::None);*/
   FPM.addPass(llvm::DCEPass());
   FPM.run(F, FAM);
 }
@@ -576,6 +587,8 @@ bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
   smt_init.emplace();
   Inst *R = nullptr;
   bool result = false;
+
+
 
   for (auto &BB : F1) {
     for (llvm::BasicBlock::reverse_iterator I = BB.rbegin(), E = BB.rend(); I != E; I++) {
@@ -604,6 +617,7 @@ bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
         for (auto I: FT->params()) {
           Args.push_back(I);
         }
+        
         for (auto &C : Sketch.second) {
           Args.push_back(C->T());
         }
@@ -645,7 +659,7 @@ bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
       while (!Fns.empty()) {
         auto [GF, G, HaveC] = Fns.top();
         Fns.pop();
-        auto Func1 = llvm_util::llvm2alive(F1, *TLI);
+          auto Func1 = llvm_util::llvm2alive(F1, *TLI);
         unsigned goodCount = 0, badCount = 0, errorCount = 0;
         if (!HaveC) {
           auto Func2 = llvm_util::llvm2alive(*GF, *TLI);
