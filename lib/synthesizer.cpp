@@ -120,6 +120,7 @@ static bool getSketches(set<unique_ptr<Var>> &Inputs, llvm::Value *V,
         R.push_back(make_pair(move(BO), move(RCs)));
       }
     }
+    
     // BinaryIntrinsics
     for (unsigned K = SIMDBinOp::Op::x86_avx2_packssdw; K <= SIMDBinOp::Op::x86_avx2_pshuf_b; ++K) {
       // typecheck for return val
@@ -280,6 +281,7 @@ static bool compareFunctions(IR::Function &Func1, IR::Function &Func2,
   Transform t;
   t.src = move(Func1);
   t.tgt = move(Func2);
+  t.preprocess();
   TransformVerify verifier(t, false);
   t.print(cout, print_opts);
 
@@ -583,11 +585,12 @@ static void DCE(llvm::Function &F) {
 bool synthesize(llvm::Function &F1, llvm::TargetLibraryInfo *TLI) {
   config::disable_undef_input = true;
   config::disable_poison_input = true;
+  config::src_unroll_cnt = 2;
+  config::tgt_unroll_cnt = 2;
 
   smt_init.emplace();
   Inst *R = nullptr;
   bool result = false;
-
 
 
   for (auto &BB : F1) {

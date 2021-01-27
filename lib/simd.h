@@ -12,7 +12,8 @@ class Function;
 
 class SIMDBinOp final : public Instr {
 public:
-  static constexpr std::array<std::pair<unsigned, unsigned>, 39> binop_op0_v = {
+  static constexpr std::array<std::pair<unsigned, unsigned>, 40> binop_op0_v = {
+  /* x86_ssse3_pshuf_b_128 */std::make_pair(16, 8),
   /* x86_avx2_packssdw */    std::make_pair(8, 32),
   /* x86_avx2_packsswb */    std::make_pair(16, 16),
   /* x86_avx2_packusdw */    std::make_pair(8, 32),
@@ -54,7 +55,8 @@ public:
   /* x86_bmi_pdep_64 */      std::make_pair(1, 64),
   };
 
-  static constexpr std::array<std::pair<unsigned, unsigned>, 39> binop_op1_v = {
+  static constexpr std::array<std::pair<unsigned, unsigned>, 40> binop_op1_v = {
+  /* x86_ssse3_pshuf_b_128 */std::make_pair(16, 8),
   /* x86_avx2_packssdw */    std::make_pair(8, 32),
   /* x86_avx2_packsswb */    std::make_pair(16, 16),
   /* x86_avx2_packusdw */    std::make_pair(8, 32),
@@ -96,7 +98,8 @@ public:
   /* x86_bmi_pdep_64 */      std::make_pair(1, 64),
   };
 
-  static constexpr std::array<std::pair<unsigned, unsigned>, 39> binop_ret_v = {
+  static constexpr std::array<std::pair<unsigned, unsigned>, 40> binop_ret_v = {
+  /* x86_ssse3_pshuf_b_128 */std::make_pair(16, 8),
   /* x86_avx2_packssdw */    std::make_pair(16, 16),
   /* x86_avx2_packsswb */    std::make_pair(32, 8),
   /* x86_avx2_packusdw */    std::make_pair(16, 16),
@@ -138,7 +141,8 @@ public:
   /* x86_bmi_pdep_64 */      std::make_pair(1, 64),
   };
 
-  enum Op { x86_avx2_packssdw,
+  enum Op { x86_ssse3_pshuf_b_128,
+            x86_avx2_packssdw,
             x86_avx2_packsswb,
             x86_avx2_packusdw,
             x86_avx2_packuswb,

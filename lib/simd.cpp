@@ -10,6 +10,7 @@
 #include "smt/exprs.h"
 #include "smt/solver.h"
 #include "util/compiler.h"
+#include "llvm/IR/IntrinsicsX86.h"
 #include <functional>
 #include <sstream>
 #include <iostream>
@@ -37,6 +38,9 @@ void SIMDBinOp::rauw(const Value &what, Value &with) {
 void SIMDBinOp::print(ostream &os) const {
   const char *str = nullptr;
   switch (op) {
+  case x86_ssse3_pshuf_b_128:
+    str = "x86.ssse3.pshuf.b.128 ";
+    break;
   case x86_avx2_packssdw:
     str = "x86.avx2.packssdw ";
     break;
@@ -337,6 +341,7 @@ StateValue SIMDBinOp::toSMT(State &s) const {
     }
     return ty->aggregateVals(vals);
   }
+
   // fused multiply add
   case x86_avx2_pmadd_ub_sw:
   case x86_avx2_pmadd_wd: {
@@ -360,6 +365,7 @@ StateValue SIMDBinOp::toSMT(State &s) const {
     }
     return ty->aggregateVals(vals);
   }
+
   // horizontal + combine
   case x86_avx2_phadd_d:
   case x86_avx2_phsub_d:
@@ -418,6 +424,9 @@ StateValue SIMDBinOp::toSMT(State &s) const {
     }
     return ty->aggregateVals(vals);
   }
+
+  // shuffle
+  case x86_ssse3_pshuf_b_128:
   case x86_avx2_pshuf_b:
     auto vty = static_cast<const VectorType*>(aty);
     vector<StateValue> vals;

@@ -1,3 +1,5 @@
+project(vectorsyn)
+
 set(SYNTHESIZER_SRC
   "lib/constantsynth.cpp"
   "lib/ir.cpp"
@@ -17,3 +19,19 @@ if(APPLE)
         LINK_FLAGS "-undefined dynamic_lookup"
     )
 endif(APPLE)
+
+configure_file(
+  ${PROJECT_SOURCE_DIR}/scripts/opt-synthesis.sh.in
+  ${PROJECT_BINARY_DIR}/opt-synthesis-test.sh
+  @ONLY
+)
+
+add_custom_target("check-vectorsyn"
+                  COMMAND "python"
+                          "${PROJECT_SOURCE_DIR}/tests/lit/lit.py"
+                          "-s"
+                          "${PROJECT_SOURCE_DIR}/tests"
+                          "-j${TEST_NTHREADS}"
+                  DEPENDS "vectorsyn"
+                  USES_TERMINAL
+                 )
